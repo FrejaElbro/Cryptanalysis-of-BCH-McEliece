@@ -1,0 +1,71 @@
+load "Tools.magma";
+load "KeyGen.magma";
+load "FindL.magma";
+load "Attack.magma";
+
+
+
+SetMemoryLimit(10000000000);
+
+// Define parameters
+p := 3; s := 2; m := 3; r := 9; // Test-parameters (runs within seconds)
+// p := 2; s:= 1; m:= 8; r := 5; // Parameters from article
+// p := 3; s:= 1; m:= 5; r := 5; // Parameters from article
+// p := 3; s:= 1; m:= 6; r := 5; // Parameters from article
+// p := 2; s:= 2; m:= 6; r := 5; // Parameters from article
+// p := 5; s:= 1; m:= 5; r := 5; // Parameters from article
+// p := 13;s:= 1; m:= 3; r := 5; // Parameters from article
+// p := 3; s:= 2; m:= 2; r := 5; // Parameters from article
+// p := 3; s:= 2; m:= 3; r := 5; // Parameters from article
+// p := 3; s:= 3; m:= 2; r := 5; // Parameters from article
+// p := 3; s:= 2; m:= 4; r := 5; // Parameters from article
+// p := 2; s:= 4; m:= 3; r := 5; // Parameters from article
+// Other lines giving the parameters used in article...
+
+
+// Run Key generation
+sk,pk   := KeyGen(p,s,m,r);
+
+
+// Define U = the degrees of equations in the system
+// (The code will automatically p'th roots to decrease the degrees of equations as much as 
+// possible)
+if p eq 2 then
+	U := {3} join {p^a : a in {0..s-1}};
+else
+	U := {2} join {p^a : a in {0..s-1}}; 
+end if;
+
+
+// Keep track of seed and running time of attack
+seedStart,seedStep := GetSeed();
+Wholetime := Time();
+
+
+// Run the attack 
+// (If the attack succeeds, then it will return a vector which can be used like the secret 
+// key to decrypt messages.)
+secretKey,solutions,Returns := BCHattack(pk,m,U); // In "Attack.magma"
+
+
+// Print the runtime of the attack
+wholeT := Time(Wholetime);
+print "Whole attack took time", wholeT;
+
+
+// Check if a solution was returned
+if Type(secretKey[1]) ne FldFinElt then
+	print "Did not find solution";
+	assert false;
+end if;
+
+
+// Save details to file
+fprintf "results.csv", "%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o\n", 
+    p^s,m,r,p^(s*m)-1,Nrows(pk[1]),Returns[1],Returns[2],Returns[3],Returns[11],Returns[4],Returns[5],Returns[6],
+    Returns[7],Returns[8], Returns[12], wholeT ,[seedStart,seedStep];
+
+
+print "";
+
+quit;

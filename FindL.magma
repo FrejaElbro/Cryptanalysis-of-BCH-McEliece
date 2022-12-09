@@ -1,0 +1,201 @@
+// Overview of functions in this file:
+forward FindL;      // FindL(p,s,m,r,U,all): int, int, int, int, set, bool -> set, set, set
+					// Master-function of this file, which calls the other functions, and among other 
+					// things decides which algorithm to use to find L.
+					// U is defined in "executable.magma".
+					// It returns a set of L's which fulfill the u-sum criteria.
+					// If all = true and if p ne 2, all L's of maximal size which fulfill the u-sum 
+					// criteria are returned. If all = false, then only some (the ones with the smallest 
+					// elements) are returned. If p = 2, there is no difference between the two calls
+					// (only some L's are returned).
+
+forward FindCq; 	// FindCq(q,m,r): int,int,int -> set
+                    // Outputs the set Cq consisting of all powers of the secret key, that we know 
+                    // satisfy the reduced system (also a union of cyclotomic cosets - see article)
+
+forward Tester;		// Tester(p,s,m,Cq,Urest,Lguess,newElt): int, int, int, set, set, int -> bool
+					// Inputting the relevant parameters, test if (Lguess U {newElt}) fulfills the u-sum 
+					// criteria, given that Lguess fulfills the U-sum criteria.
+					// Urest is the collection of degrees of non-linear equations in the system
+					// (For the choices of the article Urest = {2} or {3})
+
+forward compareSum; // Helper function needed for FindLfast to decide which set to return
+
+forward FindLexact; // FindLexact(p,s,m,r,U,Cqu,Cq, Urest, all): 
+					// int, int, int, int, set, set, set, bool -> set
+					// Given the relevant input, find L's which satisfy the u-sum criteria
+					// Cqu is the collections of all powers, l, in Cq such that {l} fulfills the u-sum
+					// criteria.
+					// For a description of "all", see under function FindL
+
+forward AdjacentLs; // AdjacentLs(p,s,m,r,Cq,Urest,L,Cqu): int, int, int, int, set, set, set, set -> set
+					// Helper function for the fast but not accurate function to find L (below).
+					// This function takes as input an L, and finds if there are other L's that overlap 
+					// with the given L on all but one or two elements.
+
+forward FindLfast;  // FindLfast(p,s,m,r,U,Cqu,Cq,Urest): int, int, int, int , set, set, set, set -> set
+					// Fast but not always correct function to find an L of maximal size
+
+
+
+
+FindL := function(p,s,m,r,U,all);
+	q   := p^s;
+	Cq  := FindCq(q,m,r);
+
+	// Find Cqu = {l in Z_(q^m-1) | l*u in Cq for all u in U}
+	Cqu := {};
+	for l in Cq do
+		linL := true;
+		for a in U do
+			if (a*l) mod (q^m-1) notin Cq then
+				linL := false;
+				break;
+			end if;
+		end for;
+		if linL then
+			Include(~Cqu,l);
+		end if;
+	end for;
+
+	// Split up U
+	Up := U meet {p^a : a in {0..s-1}};
+	Urest := U diff Up;
+
+	if Urest eq {2} then
+		Ls := FindLexact(p,s,m,r,U,Cqu,Cq,Urest,all);
+	else
+		Ls := FindLfast(p,s,m,r,U,Cqu,Cq,Urest);
+	end if;
+	return Ls;
+end function;
+
+
+FindCq := function(q,m,r)
+	Cq    := {};
+	for a in [1..r] do
+	    for e in [0..m-1] do
+	        Include(~Cq,(a*q^e) mod (q^m-1));
+	    end for;
+	end for;
+	return Cq;
+end function;
+
+
+Tester := function(p,s,m,Cq,Urest,Lguess,newElt)
+	for test in Urest do
+		nr := test;
+		ppower := 0;
+		while (nr mod p) eq 0 do
+			nr := nr div p;
+			ppower := ppower + 1;
+		end while;
+		testingset := car<{newElt},Lguess, CartesianPower(Lguess join {newElt}, nr-2)>;
+		testingset := Flat(testingset);
+		for tuple in testingset do
+			tobesummed := [tuple[i]*p^ppower : i in [1..nr]];
+			testingValue := 0;
+			for term in tobesummed do
+				testingValue := (testingValue + term) mod (p^(s*m)-1);
+			end for;
+			if testingValue notin Cq then
+				return false;
+			end if;
+		end for;
+	end for;
+	return true;
+end function;
+
+
+compareSum := function(set1,set2)
+	return &+set1 - &+set2;
+end function;
+
+
+FindLexact := function(p,s,m,r,U,Cqu,Cq,Urest,all);
+	// Only works for Urest = {2};
+	q   := p^s;
+
+	// Find L by means of graph algorithm for finding maximum cliques
+	Lguess := {x : x in Cqu | x le r div Max(Urest)};
+	edges := {<x,Exclude(Lguess,x)> : x in Lguess};
+	for vertex in Cqu diff Lguess do
+		N := {};
+		for v2 in Cqu diff {vertex} do
+			if (vertex + v2) mod (q^m-1) in Cq then
+				Include(~N,v2);
+			end if;
+		end for;
+		Include(~edges,<vertex,N>);
+	end for;
+
+	graphy,vertset,edgeset := Graph<Cqu | edges>;
+	sizeL := CliqueNumber(graphy);
+	MaxLs := AllCliques(graphy, sizeL);
+	MaxLs := [Support(sub<graphy | L>) : L in MaxLs];
+
+	if all then
+		return MaxLs;
+	else
+		// Prune to return only the smallest L's (not the Fröbenious transformed)
+		Sort(~MaxLs, compareSum);
+		return SequenceToSet(MaxLs[1..Ceiling(#MaxLs / m)]);
+	end if;
+end function;
+
+
+AdjacentLs := function(p,s,m,r,Cq,Urest,L,Cqu)
+	// Try to replace just one element
+	adjLs := {};
+	for remElt in L do
+		newL := L diff {remElt};
+		for addElt in Cqu diff L do
+			if Tester(p,s,m,Cq,Urest,newL,addElt) then
+				Include(~adjLs,newL join {addElt});
+			end if;
+		end for;
+	end for;
+
+	// Try to replace two elements
+	cL:= Sort(SetToSequence(Cqu diff L));
+	L := SetToSequence(L);
+	Sort(~L);
+	for remIndex1 in [1..#L-1] do
+		for remIndex2 in [remIndex1+1..#L] do
+			newL := Remove(L, remIndex2);
+			Remove(~newL, remIndex1);
+			for addIndex1 in [1..#cL-1] do
+				for addIndex2 in [addIndex1+1..#cL] do
+					addElt1 := cL[addIndex1];
+					addElt2 := cL[addIndex2];
+					if Tester(p,s,m,r,Cq,Urest,SequenceToSet(newL),addElt1) 
+					and Tester(p,s,m,r,Cq,Urest,SequenceToSet(newL) join {addElt1},addElt2) then
+						Include(~adjLs,SequenceToSet(newL) join {addElt1,addElt2});
+					end if;
+				end for;
+			end for;
+		end for;
+	end for;
+	return adjLs;
+end function;
+
+
+FindLfast := function(p,s,m,r,U,Cqu,Cq,Urest);
+	q   := p^s;
+
+	// Find L
+	Lguess := {x : x in Cqu | x le r div Max(Urest)};
+	possibleAdds := Cqu diff Lguess;
+	while #possibleAdds gt 0 do
+		ExtractRep(~possibleAdds, ~newElt);
+		if Tester(p,s,m,r,Cq,Urest,Lguess,newElt) then
+			Include(~Lguess,newElt);
+		end if;
+	end while;
+
+	// Find AdjacentLs
+	AdjLs := AdjacentLs(p,s,m,r,Cq,Urest,Lguess,Cqu);
+	return AdjLs join {Lguess},Cq,Cqu,Urest;
+end function;
+
+

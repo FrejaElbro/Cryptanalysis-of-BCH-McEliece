@@ -1,0 +1,15 @@
+// KeyGen(p,s,m,r): int, int, int, int -> seq , [*matrix,FldRatElt*]
+// Given the parameters of the crypto scheme, output a sk and a pk
+
+KeyGen := function(p,s,m,r)
+	q       := p^s; 
+	n       := q^m-1; 
+	fq 	  := GF(q);
+	fqm<w>:= ext<fq|m>;
+	perm    := Random(Sym(n));
+	wlist   := [w^i : i in [0..n-1]];
+	sk 		:= [wlist[i^perm] : i in [1..#wlist]];
+	G       := GeneratorMatrix(AlternantCode(sk,sk,r,fq));
+	pk      := [*G,r/2*];
+	return sk,pk;
+end function;

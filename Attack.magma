@@ -1,0 +1,408 @@
+// Overview of functions in this file:
+forward BCHattack;      // BCHattack(pk,m,U): [*matrix,FldRatElt*], int, set - > seq, seq, List
+                        // Given a public key, the extension degree, m, and the set of degrees of 
+                        // polynomials to include.
+                        // Output a vector which can act as a secret key, the sequence of sequences of 
+                        // solutions supplied by the GB algorithm, and a list (Returns) of additional 
+                        // information on the run:
+                            //Returns[1]:  #lin,     
+                            //Returns[2]:  #L,         
+                            //Returns[3]:  #free vars,    
+                            //Returns[4]:  GB times set,       
+                            //Returns[5]:  create Groots time,     
+                            //Returns[6]:  setup Syst time set,   
+                            //Returns[7]:  #sols set,          
+                            //Returns[8]:  #sols w mults set,   
+                            //Returns[9]:  Unused  
+                            //Returns[10]: Unused
+                            //Returns[11]: #polys in lin syst set 
+                            //Returns[12]: Find Ls time 
+                            //Returns[13]: Find Variety time set
+
+
+forward SplitUpU;       // SplitUpU(p,s,U): int, int, set -> List
+                        // Create Ulist which has a specific format needed for the next algorithm. 
+                        // Example: U = {p,3,p^2,3p,p^3,9,3p^2}
+                        // Turns into UList = [ [1,2,3], [], [0,1,2] ,[], [], [], [], [], [0], [] ]
+                        // If U contains numbers on the form x*p^k, where x > 10, then an exeption is 
+                        // thrown.
+
+
+forward CreateGroots;   // CreateGroots(G,UList): matrix, seq -> matrix, permutation
+                        // Adds extra rows of to G consisting of p^a'th roots for every a in {1,..,s-1}
+                        // which is less than r.
+                        // Also does Gaussian elimination and returns only the linearly independent 
+                        // rows.
+                        // Also returns a permutation sigma, chosen such that when sigma is used to 
+                        // permute the columns of Groots, then the echelon-form of Groots has the form
+                        // [I | A].
+
+
+forward RunGrobner;     // RunGrobner(G,m,Groots,nfx,UList,Returns,runnr,sigma):
+                        // matrix, int, matrix, int, List, List, int, permutation -> seq, List
+                        // Given the relevant input, run the Gröbner basis algorithm to find the 
+                        // solutions to the system with nfx variables fixed.
+                        // Returns a sequence of solutions to the system and a List of additional 
+                        // information on the run. 
+
+
+forward SetupSyst;      // SetupSyst(G,w,PolRing,nfx,Groots,Ulist,runnr): 
+                        // matrix, FldFinElt, RngMPol, int, matrix, List, int -> seq, seq
+                        // Helper-function for the function RunGrobner.
+                        // Given the necessary input, returns syst, fixVs
+                        // where syst is the system which will be solved by the Gröbner basis algorithm
+                        // and fixVs is the values of the fixed variables.
+
+
+forward FrobAllign;     // FrobAllign(G,U,solutions,firstsol): matrix, set, seq, int -> matrix
+                        // Given a sequence of sequences of solutions to the system 
+                        // and a choice of a solution from the first set.
+                        // Return a matrix, whose rows form a set of solutions that 
+                        //    - all lie in the same vectorspace of solutions
+                        //    - contains one solution from each of the sets of solutions 
+                        //      (the solution picked from the first set is decided by the variable 
+                        //      "firstsol") 
+
+
+forward DetangleL;      // DetangleL(p,s,m,L,W): int, int, int, set, matrix -> seq
+                        // Find sk given L and W, a basis for {alpha^l | l in L}
+
+
+BCHattack := function(pk,m,U)
+
+    // Redefine parameters
+    G      := pk[1];
+    k      := Nrows(G);
+    n      := Ncols(G);
+    fq     := BaseRing(G);
+    fqm<w> := ext<fq|m>;
+    q      := #fq;
+    T,p,s  := IsPrimePower(q);
+    r      := Round(pk[2] * 2);
+
+
+    // Setup list of extra return values
+    Returns := [*0,0,0,{},0,{},{},{},0,0,{},0,{}*];
+                    //1:  #lin,     
+                    //2:  #L,         
+                    //3:  #free vars,    
+                    //4:  GB times set,       
+                    //5:  create Groots time,     
+                    //6:  setup Syst time set,   
+                    //7:  #sols set,          
+                    //8:  #sols w mults set,   
+                    //9:  Unused  
+                    //10: Unused
+                    //11: #polys in lin syst set 
+                    //12: Find Ls time 
+                    //13: Find Variety time set
+
+
+    // Find all relevant L's of maximal size
+    // (If L1 = q*L2, then they are not both relevant, 
+    // so only the L with the smallest elements will be returned)
+    Ltime := Time();
+    Ls := FindL(p,s,m,r,U,false); //From file FindL.magma
+    Returns[12] := StringToInteger(Time(Ltime)[1..#Time(Ltime)-4]);
+    L := Random(Ls);
+    AdjLs := Ls diff {L};
+    Returns[2] := #L;
+    print "Ls",Ls;
+
+
+    // Setup input for Gröbner basis calculation
+    // Groots is the echelon form of the vertical join of the matrices G, G1, G2,.., Gs-1
+    // Where G_i contains the p^i'th roots of the elements of G
+    nfx := #L;
+    UList := SplitUpU(p,s,U);
+    GrootsTime := Time();
+    Groots,sigma := CreateGroots(G,UList);
+    Returns[5] := StringToInteger(Time(GrootsTime)[1..#Time(GrootsTime)-4]);
+    Returns[1] := Rank(Groots);
+    Returns[3] := n-Returns[1]-Returns[2];
+
+
+    // Run the Gröbner basis calculation
+    solutions := [];
+    for runnr in [1..#L] do
+        T := Time();
+        sols, Returns := RunGrobner(G,m,Groots,nfx,UList,Returns,runnr,sigma);
+        Append(~solutions,sols);
+    end for;
+    Returns[7] := {#sols: sols in solutions};
+
+
+    // Run Frobenious Allignment + Detangle L
+    for firstsol in [1..#solutions[1]] do
+        T := Time();
+        W := FrobAllign(G,U,solutions,firstsol);
+        print "Frobenious Allignment took time", Time(T);
+        print "Rank(W)", Rank(W);
+        print "Current L guess", L;
+        Xguess := DetangleL(p,s,m,L,W);
+        if Type(Xguess) ne BoolElt and FoundSecretKey(Xguess,G,r) then
+            return Xguess,solutions,Returns;
+        else
+            for adjL in AdjLs do
+                print "current adjL guess", adjL;
+                Xguess := DetangleL(p,s,m,L,W);
+                if Type(Xguess) ne BoolElt and FoundSecretKey(Xguess,G,r) then
+                    return Xguess,solutions, Returns;
+                end if;
+            end for;
+        end if;         
+    end for;
+    print "Not able to disentangle solutions";
+    return false,solutions, Returns;
+end function;
+
+
+SplitUpU := function(p,s,U)
+     
+    UList := [*{} : i in [1..10] *];
+    for elt in U do
+        nr := elt;
+        pow := 0;
+        while nr mod p eq 0 do
+            nr := nr div p;
+            pow := pow + 1;
+        end while;
+        try
+            Include(~UList[nr],pow);
+        catch e
+            print "You are trying to include polynomial equations of degree higher than 10 in your GB.";
+            print "This code assumes all degrees are smaller than 10. You need to change the code if you wish";
+            print "to use polynomials of degree higher than 10.";
+            assert false;
+        end try;
+    end for;
+
+    return UList;
+end function;
+
+
+CreateGroots := function(G,UList)
+    k      := Nrows(G);
+    n      := Ncols(G);
+    fq     := BaseRing(G);
+    q      := #fq;
+    T,p,s  := IsPrimePower(q);
+    
+    Groots := Matrix(fq,0,n,[]);
+    for power in UList[1] do
+        for rowindex in [1..k] do
+            row       := [G[rowindex][i] : i in [1..n]];
+            rowpow    := [elt^(p^(-power mod s)) : elt in row];
+            matrowpow := Matrix(fq,1,n,rowpow);
+            Groots    := VerticalJoin(Groots,matrowpow);
+        end for;
+    end for;
+    Groots := EchelonForm(Groots);
+    kp     := Rank(Groots);
+    Groots := RowSubmatrixRange(Groots,1,kp);
+
+    // Permute columns of Groots to be able to write Groots on form [I | something]
+    GrootsLeft  := ColumnSubmatrixRange(Groots,1,kp);
+    sigma := Id(Sym(n));
+    while Rank(GrootsLeft) ne kp do
+        sigma := Random(Sym(n));
+        GrootsPerm := GeneratorMatrix(LinearCode(Groots)^sigma);
+        GrootsLeft  := ColumnSubmatrixRange(GrootsPerm,1,kp);
+    end while;
+
+    return Groots,sigma;
+end function;
+
+
+SetupSyst := function(G,w,PolRing,nfx,Groots,Ulist,runnr)
+    n   := Ncols(G);
+    kp  := Nrows(Groots);
+
+    // Setup X with free variables, fixed variables, and linearly dependent variables.
+    freeX       := [PolRing.i : i in [1..n-nfx-kp]];
+    fixVs       := [w^(i* runnr) : i in [1..nfx]];              
+    rightX      := Matrix(PolRing,n-kp,1,fixVs cat freeX); 
+    Groots      := ChangeRing(Groots,PolRing);
+    GrootsRight := ColumnSubmatrixRange(Groots,kp+1,n);
+    LinDepX     := -GrootsRight * rightX;
+    LinDepX     := [LinDepX[i][1] : i in [1..kp]];
+    X           := LinDepX cat fixVs cat freeX;
+
+    // Compute Syst
+    Syst  := [];
+    G     := ChangeRing(G,PolRing);
+    for nr in [2..10] do
+        powset := Ulist[nr];
+        if powset eq {0} then
+            V     := Matrix(PolRing, 1 ,n, [X[j]^nr : j in [1..n]]);   
+            Syst  := Syst cat ElementToSequence(V*Transpose(G)); 
+        elif powset eq {} then
+            continue;
+        elif powset eq Ulist[1] then 
+            V     := Matrix(PolRing, 1 ,n, [X[j]^nr : j in [1..n]]);   
+            Syst  := Syst cat ElementToSequence(V*Transpose(Groots)); 
+        else
+            print "The code cannot handle your input of U.";
+            print "If you write U as:";
+            print "{1*p^a : a in somepowers1} cup {2*p^a : a in somepowers2} cup ... cup {10*p^a : a in somepowers10}";
+            print "Then somepowers2,.., somepowers10 need to be either empty, {0} or equal to somepowers1";
+            print "If you want to, you can modify the code to allow more freedom.";
+            assert false;         
+        end if;
+    end for;
+    return Syst,fixVs;             
+end function;
+
+
+RunGrobner := function(G,m,Groots,nfx,UList,Returns,runnr,sigma)
+
+    // Redefine parameters
+    k      := Nrows(G);
+    n      := Ncols(G);
+    fq     := BaseRing(G);
+    fqm<w> := ext<fq|m>;
+    q      := #fq;
+    T,p,s  := IsPrimePower(q);
+    G      := GeneratorMatrix(LinearCode(G)^sigma);
+    kp     := Nrows(Groots);
+    Groots := GeneratorMatrix(LinearCode(Groots)^sigma);
+
+    // Setup Syst
+    PolRing     := PolynomialRing(fqm,n-nfx-kp,"grevlex");  
+    T := Time();
+    Syst,fixVs := SetupSyst(G,w,PolRing,nfx,Groots,UList,runnr);
+    Include(~Returns[6],Time(T));
+    Syst := Linearize(Syst);
+    Include(~Returns[11],#Syst);
+
+    // Find solutions
+    T           := Time();
+    SystemIdeal := ideal<PolRing|Syst>; 
+    Gb ,deglist := GroebnerBasis(SystemIdeal);
+    Include(~Returns[4],Time(T));
+    print "Gröbner basis calculation",runnr, "done in time",Time(T);
+    VVtime      := Time();
+    VV          := Variety(SystemIdeal,fqm);
+    Include(~Returns[13],Time(VVtime));
+    print "and produced", #VV, "solutions";
+    
+    // Use linear algebra to deduce the linearly dependent variables
+    solutions   := [];
+    for v in VV do 
+        rightSol    := fixVs cat [v[i] : i in [1..#v]];
+        rightSol    := Matrix(fqm,n-kp,1,rightSol); 
+        Groots      := ChangeRing(Groots,fqm);
+        GrootsRight := ColumnSubmatrixRange(Groots,kp+1,n);
+        LinDepSol   := -GrootsRight * rightSol;
+        LinDepSol   := [LinDepSol[i][1] : i in [1..kp]];
+        Sol         := LinDepSol cat [rightSol[i][1] : i in [1..n-kp]]; 
+        SolRePerm   := GeneratorMatrix(LinearCode(Matrix(1,n,Sol))^(sigma^(-1)));
+        SolRePerm   := [SolRePerm[1][i] : i in [1..n]];
+        Include(~solutions,SolRePerm);
+    end for;
+
+    // Compute number solutions counted with multiplicities
+    HS         := HilbertSeries(Ideal([LeadingTerm(u) : u in Gb]));
+    try
+     solsWMult := Evaluate(HS,1); 
+    catch err
+     solsWMult := "inf"; 
+    end try; 
+    Include(~Returns[8],solsWMult);
+
+
+    return solutions,Returns;
+end function;
+
+
+FrobAllign := function(G,U,solutions,firstsol)
+    n   := #solutions[1][1];
+    fqm := Parent(solutions[1][1][1]);
+
+
+    // Setup system with nothing fixed
+    PolRing := PolynomialRing(fqm,n);
+    X       := [PolRing.i : i in [1..n]];   
+    G       := ChangeRing(G,PolRing);
+    V       := Matrix(PolRing, #U ,n, [[X[j]^nr : j in [1..n]] : nr in U]);   
+    Syst    := ElementToSequence(V*Transpose(G)); 
+
+    // Run through solutionsets and build a set that comes from same vectorspace
+    solution1 := solutions[1][firstsol];
+    sameVecSols := [solution1];
+    for i in [2..#solutions] do
+        posSameVec := SequenceToSet(solutions[i]);
+        for vector in posSameVec do
+            testcase := [vector[l] + solution1[l] : l in [1..n]];
+            includeVec := true;
+            for pol in Syst do
+                if Evaluate(pol,testcase) ne 0 then
+                    includeVec := false;
+                    break;
+                end if;
+            end for;
+            if includeVec then
+                Append(~sameVecSols,vector);
+                break;
+            end if;
+        end for;
+    end for;
+    if #sameVecSols ne #solutions then
+        print "In FroAllignPoly, too many vectors fit in the vectorspace.";
+        print "I don't know how this can happen.";
+        print "Number of vectors", #sameVecSols;
+        assert false;
+    end if;
+    return Matrix(#sameVecSols,n,sameVecSols);
+end function;
+
+
+DetangleL := function(p,s,m,L,W)
+    q   := p^s;
+    fqm := GF(q^m);
+    modulo := q^m-1;
+
+    while L meet {p^a : a in {1..s*m-1}} ne {} do
+        // Work with L
+        Ppowers := L meet {p^a : a in {1..s*m-1}};
+        maxL := Max(L);
+        Ppowers := { x : x in Ppowers | x*maxL le modulo};
+        if Ppowers eq {} then
+            break;
+        end if;
+        goodp := Max(Ppowers);
+        goodpinv := p^(s*m) div goodp;
+        pL := {(goodpinv*l) mod modulo : l in L};
+        L := L meet pL;
+        print "After a step of detanglement L is now" , L;
+
+        // Work with the matrix
+        Wp := Matrix(fqm,Nrows(W),Ncols(W),
+                 [[W[j,i]^goodpinv : i in [1..Ncols(W)]] : j in [1..Nrows(W)]]);
+        W := GeneratorMatrix(LinearCode(W) meet LinearCode(Wp));
+        print "Rank(W) after a step", Rank(W);
+        if Rank(W) ne #L then
+            print "W and L guess do not match.";
+            return false;
+        end if;                                                     
+    end while;
+
+    //Check if L is consecutive
+    if L ne {1..#L} then
+        print "L is not consecutive. We need to implement someting (Grobner bases) to deal with this.";
+        return false;
+    end if;
+
+    //Implement the Sidelnikov-Shestakov attack
+    if #L eq 1 then
+        return [W[1,i] : i in [1..Ncols(W)]];
+    else
+        try
+            result := SidelShestaAttack(W,fqm);
+            return [result[i]^(-1) : i in [1..Ncols(W)]];
+        catch e
+            print "SidelShesta did not get an input it was expecting, and failed";
+            return false;
+        end try;
+    end if;
+end function;
