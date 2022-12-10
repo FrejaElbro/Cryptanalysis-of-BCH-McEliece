@@ -93,6 +93,28 @@ FindL := function(p,s,m,r,U,all);
 end function;
 
 
+WellFormed := function(L,p,s,m)
+	sigma := 1+ Floor(Log(p,Max(L)));
+	wellformed := sigma lt s*m;
+	for a in [0..sigma-1] do
+		wellformed := wellformed and (p^a in L);
+	end for;
+	included := 1;
+	for b in [2..p-1] do
+		bincluded := true;
+		for a in [0..sigma-1] do
+			bincluded := bincluded and (b*p^a in L);
+		end for;
+		if bincluded and included ne b-1 then
+			wellformed := false;
+		elif bincluded and included eq b-1 then
+			included := b;
+		end if;
+	end for;
+	return wellformed;
+end function;
+
+
 FindCq := function(q,m,r)
 	Cq    := {};
 	for a in [1..r] do
