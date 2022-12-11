@@ -30,7 +30,8 @@ load "Attack.magma";
 SetMemoryLimit(10000000000);
 
 // Define parameters
-p := 3; s := 2; m := 3; r := 9; // Test-parameters (runs within seconds)
+p := 2; s := 3; m := 3; r := 10;
+// p := 3; s := 2; m := 3; r := 9; // Test-parameters (runs within seconds)
 // p := 2; s:= 1; m:= 8; r := 5; // Parameters from article
 // p := 3; s:= 1; m:= 5; r := 5; // Parameters from article
 // p := 3; s:= 1; m:= 6; r := 5; // Parameters from article

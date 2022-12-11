@@ -1,1 +1,5 @@
 q;m;r;n;k;number of linear equations (=Rank(Groots);size of L;Number of free variables in the GB calculation;Number of linearly independent polynomials in the GB calculation, once variables have been eliminated using the linear equations;Time used for GB calculation (might be different in the #L different runs);Time expended calculating Groots;Time used to setup system (might be different in the #L different runs);Number of solutions (might be different in the #L different runs);Number of solutions counted with multiplicities in the algebraic closure of Fqm (might be different in the #L different runs);Time to find L;total time;Seed
+9;3;9;728;704;716;3;9;{ 48 };{ 0.000 };1;{ 0.270, 0.280 };{ 3 };{ 6 };0;2.520;[ 1872265604, 1066 ]
+9;3;9;728;704;716;3;9;{ 48 };{ 0.000 };1;{ 0.270, 0.280 };{ 3 };{ 6 };0;2.710;[ 1470211359, 1057 ]
+9;3;9;728;704;716;3;9;{ 48 };{ 0.000 };1;{ 0.270, 0.280 };{ 3 };{ 6 };0;2.660;[ 3092138956, 1014 ]
+8;3;10;511;484;502;2;7;{ 21 };{ 0.000 };0;{ 0.130, 0.140 };{ 3 };{ 18 };0;1.540;[ 2858179204, 651 ]

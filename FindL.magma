@@ -27,9 +27,12 @@ forward FindL;      // FindL(p,s,m,r,U,all): int, int, int, int, set, bool -> se
 					// U is defined in "executable.magma".
 					// It returns a set of L's which fulfill the u-sum criteria.
 					// If all = true and if p ne 2, all L's of maximal size which fulfill the u-sum 
-					// criteria are returned. If all = false, then only some (the ones with the smallest 
-					// elements) are returned. If p = 2, there is no difference between the two calls
-					// (only some L's are returned).
+					// criteria are returned. If all = false, then only the well formed are returned
+					// If p = 2, there is no difference between the two calls. Only well-formed L's are 
+					// returned.
+					
+forward WellFormed; // WellFormed(L,p,s,m): set, int, int, int -> bool
+					// Checks if the set L is well-formed
 
 forward FindCq; 	// FindCq(q,m,r): int,int,int -> set
                     // Outputs the set Cq consisting of all powers of the secret key, that we know 
@@ -88,6 +91,13 @@ FindL := function(p,s,m,r,U,all);
 		Ls := FindLexact(p,s,m,r,U,Cqu,Cq,Urest,all);
 	else
 		Ls := FindLfast(p,s,m,r,U,Cqu,Cq,Urest);
+		WFMaxLs := {};
+		for MaxL in Ls do
+			if WellFormed(MaxL,p,s,m) then
+				Include(~WFMaxLs,MaxL);
+			end if;
+		end for;
+		Ls := WFMaxLs;
 	end if;
 	return Ls;
 end function;
@@ -176,14 +186,19 @@ FindLexact := function(p,s,m,r,U,Cqu,Cq,Urest,all);
 	graphy,vertset,edgeset := Graph<Cqu | edges>;
 	sizeL := CliqueNumber(graphy);
 	MaxLs := AllCliques(graphy, sizeL);
-	MaxLs := [Support(sub<graphy | L>) : L in MaxLs];
+	MaxLs := {Support(sub<graphy | L>) : L in MaxLs};
 
+	// If all, return all Max L's. If not, return only the well formed.
 	if all then
 		return MaxLs;
 	else
-		// Prune to return only the smallest L's (not the Fröbenious transformed)
-		Sort(~MaxLs, compareSum);
-		return SequenceToSet(MaxLs[1..Ceiling(#MaxLs / m)]);
+		WFMaxLs := {};
+		for MaxL in MaxLs do
+			if WellFormed(MaxL,p,s,m) then
+				Include(~WFMaxLs,MaxL);
+			end if;
+		end for;
+		return WFMaxLs;
 	end if;
 end function;
 
@@ -212,8 +227,8 @@ AdjacentLs := function(p,s,m,r,Cq,Urest,L,Cqu)
 				for addIndex2 in [addIndex1+1..#cL] do
 					addElt1 := cL[addIndex1];
 					addElt2 := cL[addIndex2];
-					if Tester(p,s,m,r,Cq,Urest,SequenceToSet(newL),addElt1) 
-					and Tester(p,s,m,r,Cq,Urest,SequenceToSet(newL) join {addElt1},addElt2) then
+					if Tester(p,s,m,Cq,Urest,SequenceToSet(newL),addElt1) 
+					and Tester(p,s,m,Cq,Urest,SequenceToSet(newL) join {addElt1},addElt2) then
 						Include(~adjLs,SequenceToSet(newL) join {addElt1,addElt2});
 					end if;
 				end for;
@@ -232,7 +247,7 @@ FindLfast := function(p,s,m,r,U,Cqu,Cq,Urest);
 	possibleAdds := Cqu diff Lguess;
 	while #possibleAdds gt 0 do
 		ExtractRep(~possibleAdds, ~newElt);
-		if Tester(p,s,m,r,Cq,Urest,Lguess,newElt) then
+		if Tester(p,s,m,Cq,Urest,Lguess,newElt) then
 			Include(~Lguess,newElt);
 		end if;
 	end while;
