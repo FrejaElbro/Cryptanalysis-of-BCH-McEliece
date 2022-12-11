@@ -19,7 +19,7 @@ def WellFormed(L,p,s,m):
 
 
 # Run through following output file and report results
-file1 = open('Lresultsq3.csv', 'r')
+file1 = open('Lresultsq2.csv', 'r')
 
 # Setup variables to use
 haswellformed = True
@@ -77,8 +77,9 @@ file1.close()
 # Report on the last results
 if haswellformed == False:
 	print("First failed r", r)
-	for i in range(len(theseSets)):
-		print(theseBools[i])#, theseSets[i])
+	# If you want to see the first Ls that fail, uncomment the following
+	#for i in range(len(Ls)):
+	#	print(Ls[i])
 else:
 	print("still working r",r)
 
