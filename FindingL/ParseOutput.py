@@ -19,7 +19,7 @@ def WellFormed(L,p,s,m):
 
 
 # Run through following output file and report results
-file1 = open('Lresultsq2.csv', 'r')
+file1 = open('Lresultsq27.csv', 'r')
 
 # Setup variables to use
 haswellformed = True

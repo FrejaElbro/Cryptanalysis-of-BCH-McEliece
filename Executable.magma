@@ -27,11 +27,8 @@ load "Attack.magma";
 
 
 
-SetMemoryLimit(10000000000);
-
 // Define parameters
-p := 2; s := 3; m := 3; r := 10;
-// p := 3; s := 2; m := 3; r := 9; // Test-parameters (runs within seconds)
+p := 3; s := 2; m := 3; r := 9; // Test-parameters (runs within seconds)
 // p := 2; s:= 1; m:= 8; r := 5; // Parameters from article
 // p := 3; s:= 1; m:= 5; r := 5; // Parameters from article
 // p := 3; s:= 1; m:= 6; r := 5; // Parameters from article
@@ -43,11 +40,17 @@ p := 2; s := 3; m := 3; r := 10;
 // p := 3; s:= 3; m:= 2; r := 5; // Parameters from article
 // p := 3; s:= 2; m:= 4; r := 5; // Parameters from article
 // p := 2; s:= 4; m:= 3; r := 5; // Parameters from article
-// Other lines giving the parameters used in article...
+
+
+
+// Define optional extra parameters (for defenses puncture and subcode)
+n := p^(s*m)-1; // n smaller than p^(s*m)-1 corresponds to puncturing the code
+l := 0; 		// l greater than zero corresponds to taking a random subcode 
+				// of dimension k-l
 
 
 // Run Key generation
-sk,pk   := KeyGen(p,s,m,r);
+sk,pk   := KeyGen(p,s,m,r,n,l);
 
 
 // Define U = the degrees of equations in the system
@@ -60,9 +63,12 @@ else
 end if;
 
 
-// Keep track of seed and running time of attack
-seedStart,seedStep := GetSeed();
-Wholetime := Time();
+// Keep track of seed, memory allocation and running time of attack
+System("date");
+seedStart,seedStep 	:= GetSeed();
+Wholetime 			:= Time();
+nrClockCycles 		:= ClockCycles();
+SetMemoryLimit(10000000000);
 
 
 // Run the attack 
@@ -84,11 +90,9 @@ end if;
 
 
 // Save details to file
-fprintf "results.csv", "%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o\n", 
-    p^s,m,r,p^(s*m)-1,Nrows(pk[1]),Returns[1],Returns[2],Returns[3],Returns[11],Returns[4],Returns[5],Returns[6],
-    Returns[7],Returns[8], Returns[12], wholeT ,[seedStart,seedStep];
+fprintf "results.csv", "%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o;%o\n", 
+    p^s,m,r,n,Nrows(pk[1]),Returns[1],Returns[2],Returns[3],Returns[11],Returns[4],Returns[5],Returns[6],
+    Returns[7],Returns[8], Returns[12], wholeT, ClockCycles() - nrClockCycles,[seedStart,seedStep];
 
-
-print "";
 
 quit;

@@ -20,18 +20,30 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.*/
 
-// KeyGen(p,s,m,r): int, int, int, int -> seq , [*matrix,FldRatElt*]
+// KeyGen(p,s,m,r): int, int, int, int, int -> seq , [*matrix,FldRatElt*]
 // Given the parameters of the crypto scheme, output a sk and a pk
+// For n smaller than p^(s*m)-1 the GRS-code is punctured on random positions
+// For l greater than zero, a random subcode of dimension k-l is taken of the 
+// BCH code.
 
-KeyGen := function(p,s,m,r)
+
+KeyGen := function(p,s,m,r,n,l)
 	q       := p^s; 
-	n       := q^m-1; 
 	fq 	  := GF(q);
 	fqm<w>:= ext<fq|m>;
 	perm    := Random(Sym(n));
-	wlist   := [w^i : i in [0..n-1]];
+	wlist   := SetToSequence(RandomSubset({w^i : i in [0..q^m-1]}, n));
 	sk 		:= [wlist[i^perm] : i in [1..#wlist]];
 	G       := GeneratorMatrix(AlternantCode(sk,sk,r,fq));
+	k       := Nrows(G);
+	print "kBCH",k;
+	while Nrows(G) gt k - l do
+		H   := ParityCheckMatrix(LinearCode(G));
+		H   := VerticalJoin(H,RandomMatrix(fq, Nrows(G) - (k - l), n));
+		G   := ParityCheckMatrix(LinearCode(H));
+		print "Nrows(G)",Nrows(G);
+	end while;
 	pk      := [*G,r/2*];
 	return sk,pk;
 end function;
+

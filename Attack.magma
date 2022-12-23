@@ -161,14 +161,18 @@ BCHattack := function(pk,m,U)
         print "Frobenious Allignment took time", Time(T);
         print "Rank(W)", Rank(W);
         print "Current L guess", L;
-        Xguess := DetangleL(p,s,m,L,W);
-        if Type(Xguess) ne BoolElt and FoundSecretKey(Xguess,G,r) then
+        Xguess := DetangleL(p,s,m,L,W,G,r);
+        fsk := FoundSecretKey(Xguess,G,r);
+        print "Found Secret key", fsk;
+        if Type(Xguess) ne BoolElt and fsk then
             return Xguess,solutions,Returns;
         else
             for adjL in AdjLs do
                 print "current adjL guess", adjL;
                 Xguess := DetangleL(p,s,m,L,W);
-                if Type(Xguess) ne BoolElt and FoundSecretKey(Xguess,G,r) then
+                fsk := FoundSecretKey(Xguess,G,r);
+                print "Found Secret key", fsk;
+                if Type(Xguess) ne BoolElt and fsk then
                     return Xguess,solutions, Returns;
                 end if;
             end for;
@@ -379,7 +383,7 @@ FrobAllign := function(G,U,solutions,firstsol)
 end function;
 
 
-DetangleL := function(p,s,m,L,W)
+DetangleL := function(p,s,m,L,W,G,r)
     q   := p^s;
     fqm := GF(q^m);
     modulo := q^m-1;
@@ -420,8 +424,7 @@ DetangleL := function(p,s,m,L,W)
         return [W[1,i] : i in [1..Ncols(W)]];
     else
         try
-            result := SidelShestaAttack(W,fqm);
-            return [result[i]^(-1) : i in [1..Ncols(W)]];
+            return SidelShestaAttack(W,G,r);
         catch e
             print "SidelShesta did not get an input it was expecting, and failed";
             return false;
